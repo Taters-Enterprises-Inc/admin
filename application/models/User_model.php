@@ -83,4 +83,22 @@ class User_model extends CI_Model {
         }
     }
 
+
+    public function getUserInfo($user_id){
+        $this->db->select('
+            A.id,
+            B.first_name,
+            B.last_name,
+            C.contact_number, 
+        ');
+
+        $this->db->from('users A');
+        $this->db->join('user_personal_details B', 'B.user_id = A.id', 'left');
+        $this->db->join('user_contact_details C', 'B.user_id = A.id', 'left');
+        $this->db->where('A.id', $user_id);
+
+        $query = $this->db->get();
+        return $query->row();
+    }
+
 }

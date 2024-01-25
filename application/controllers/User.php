@@ -126,4 +126,29 @@ class User extends CI_Controller{
         return $data;
     }
 
+
+
+    public function user_information($user_id){
+      switch($this->input->server('REQUEST_METHOD')){
+        case 'GET': 
+  
+          $user =  $this->user_model->getUserInfo($user_id);
+          $user->groups = $this->user_model->getUserGroups($user->id);
+          // $user->stockOrderGroup = $this->stock_ordering_model->getUserGroups($user->id);
+          // $user->salesGroup = $this->sales_model->getUserGroups($user->id);
+  
+  
+          $response = array(
+            "message" => 'Successfully fetch user information',
+            "data" => $user,
+          );
+  
+          header('content-type: application/json');
+          echo json_encode($response);
+          return;
+      }
+    }
+
+
+
 }
