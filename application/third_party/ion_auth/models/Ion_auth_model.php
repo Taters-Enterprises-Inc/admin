@@ -817,6 +817,7 @@ class Ion_auth_model extends CI_Model
 			$this->set_error('account_creation_duplicate_identity');
 			return FALSE;
 		}
+		
 		else if (!$this->config->item('default_group', 'ion_auth') && empty($groups))
 		{
 			$this->set_error('account_creation_missing_default_group');
@@ -824,12 +825,16 @@ class Ion_auth_model extends CI_Model
 		}
 
 		// check if the default set in config exists in database
+
 		$query = $this->db->get_where($this->tables['groups'], ['name' => $this->config->item('default_group', 'ion_auth')], 1)->row();
+		
 		if (!isset($query->id) && empty($groups))
 		{
 			$this->set_error('account_creation_invalid_default_group');
 			return FALSE;
 		}
+
+	
 
 		// capture default group details
 		$default_group = $query;
@@ -840,16 +845,20 @@ class Ion_auth_model extends CI_Model
 		// Do not pass $identity as user is not known yet so there is no need
 		$password = $this->hash_password($password);
 
+
+
 		if ($password === FALSE)
 		{
 			$this->set_error('account_creation_unsuccessful');
 			return FALSE;
 		}
+		
 
 		// Users table.
 		$data = [
 			$this->identity_column => $identity,
 			'password' => $password,
+			'username' => $email, //temporary
 			'email' => $email,
 			'ip_address' => $ip_address,
 			'created_on' => time(),
@@ -858,13 +867,38 @@ class Ion_auth_model extends CI_Model
 
 		// filter out any data passed that doesnt have a matching column in the users table
 		// and merge the set user data and the additional data
+
 		$user_data = array_merge($this->_filter_data($this->tables['users'], $additional_data), $data);
 
 		$this->trigger_events('extra_set');
 
 		$this->db->insert($this->tables['users'], $user_data);
+		
 
 		$id = $this->db->insert_id($this->tables['users'] . '_id_seq');
+
+		#Insert additional data on user_personal_details
+		$user_personal_detail_data = $this->_filter_data($this->tables['user_personal_details'], $additional_data);
+		$user_personal_detail_data['user_id'] = $id;
+		$this->db->insert($this->tables['user_personal_details'], $user_personal_detail_data);
+
+		#Insert additional data on company
+		$user_company['user_id'] = $id;
+		$company = $this->_filter_data($this->tables['companies'], $additional_data);
+
+		$user_company['company_id'] = $this->get_id_by_values($this->tables['companies'], $company);
+
+		if($user_company['company_id'] === null){
+			$this->db->insert($this->tables['companies'], $company);
+			$user_company['company_id'] = $this->db->insert_id();
+		}
+		$this->db->insert($this->tables['user_companies'], $user_company);
+		
+
+		#Insert additional data on phonenumber
+		$user_contact = $this->_filter_data($this->tables['user_contact_details'], array_merge($user_data, $additional_data));
+		$user_contact['user_id'] = $id;
+		$this->db->insert($this->tables['user_contact_details'], $user_contact);
 
 		if(!$id) {
 			return FALSE;
@@ -887,9 +921,30 @@ class Ion_auth_model extends CI_Model
 
 		$this->trigger_events('post_register');
 
+
+
 		return (isset($id)) ? $id : FALSE;
 	}
+	
 
+	public function get_id_by_values($table, $conditions){
+		
+		$this->db->select('id');
+		$this->db->from($table);
+
+		foreach ($conditions as $column => $value) {
+			$this->db->where('LOWER(' . $column . ')', strtolower($value));
+		}
+		
+		$query = $this->db->get();
+
+		if ($query->num_rows() > 0) {
+            return $query->row()->id;
+        } else {
+            return null;
+        }
+	}
+	
 	/**
 	 * login
 	 *
@@ -993,7 +1048,7 @@ class Ion_auth_model extends CI_Model
 	 */
 	public function recheck_session()
 	{
-		if (empty($this->session->userdata('identity')))
+		if (empty($this->session->admin['identity']))
 		{
 			return FALSE;
 		}
@@ -1002,12 +1057,12 @@ class Ion_auth_model extends CI_Model
 
 		if ($recheck !== 0)
 		{
-			$last_login = $this->session->userdata('last_check');
+			$last_login = $this->session->admin['last_check'];
 			if ($last_login + $recheck < time())
 			{
 				$query = $this->db->select('id')
 								  ->where([
-									  $this->identity_column => $this->session->userdata('identity'),
+									  $this->identity_column => $this->session->admin['identity'],
 									  'active' => '1'
 								  ])
 								  ->limit(1)
@@ -1015,22 +1070,20 @@ class Ion_auth_model extends CI_Model
 								  ->get($this->tables['users']);
 				if ($query->num_rows() === 1)
 				{
-					$this->session->set_userdata('last_check', time());
+					$this->session->admin['last_check'] = time();
 				}
 				else
 				{
 					$this->trigger_events('logout');
 
-					$identity = $this->config->item('identity', 'ion_auth');
-
-					$this->session->unset_userdata([$identity, 'id', 'user_id']);
+					$this->session->unset_userdata('admin');
 
 					return FALSE;
 				}
 			}
 		}
 
-		$session_hash = $this->session->userdata('ion_auth_session_hash');
+		$session_hash = $this->session->admin['ion_auth_session_hash'];
 
 		return (bool)$session_hash && $session_hash === $this->config->item('session_hash', 'ion_auth');
 	}
@@ -1510,8 +1563,8 @@ class Ion_auth_model extends CI_Model
 		$this->trigger_events('user');
 
 		// if no id was passed use the current users id
-		$id = isset($id) ? $id : $this->session->userdata('user_id');
-
+		$id = isset($id) ? $id : $this->session->admin['user_id'];
+		
 		$this->limit(1);
 		$this->order_by($this->tables['users'].'.id', 'desc');
 		$this->where($this->tables['users'].'.id', $id);
@@ -1534,7 +1587,7 @@ class Ion_auth_model extends CI_Model
 		$this->trigger_events('get_users_group');
 
 		// if no id was passed use the current users id
-		$id || $id = $this->session->userdata('user_id');
+		$id || $id = $this->session->admin['user_id'];
 
 		return $this->db->select($this->tables['users_groups'].'.'.$this->join['groups'].' as id, '.$this->tables['groups'].'.name, '.$this->tables['groups'].'.description')
 		                ->where($this->tables['users_groups'].'.'.$this->join['users'], $id)
@@ -1554,7 +1607,7 @@ class Ion_auth_model extends CI_Model
 	{
 		$this->trigger_events('in_group');
 
-		$id || $id = $this->session->userdata('user_id');
+		$id || $id = $this->session->admin['user_id'];
 
 		if (!is_array($check_group))
 		{
@@ -1614,7 +1667,7 @@ class Ion_auth_model extends CI_Model
 		$this->trigger_events('add_to_group');
 
 		// if no id was passed use the current users id
-		$user_id || $user_id = $this->session->userdata('user_id');
+		$user_id || $user_id = $this->session->admin['user_id'];
 
 		if(!is_array($group_ids))
 		{
@@ -1786,7 +1839,7 @@ class Ion_auth_model extends CI_Model
 	{
 		$this->trigger_events('pre_update_user');
 
-		$user = $this->user($id)->row();
+		// $user = $this->user($id)->row();
 
 		$this->db->trans_begin();
 
@@ -1801,18 +1854,23 @@ class Ion_auth_model extends CI_Model
 			return FALSE;
 		}
 
-		// Filter the data passed
-		$data = $this->_filter_data($this->tables['users'], $data);
+		//Filter data
+		$user_data = $this->_filter_data($this->tables['users'], $data);
+		$user_personal_details_data = $this->_filter_data($this->tables['user_personal_details'], $data);
+		$user_contact = $this->_filter_data($this->tables['user_contact_details'], $data);
+		$company = $this->_filter_data($this->tables['companies'], $data);
 
-		if (array_key_exists($this->identity_column, $data) || array_key_exists('password', $data) || array_key_exists('email', $data))
+
+		
+		if (array_key_exists($this->identity_column, $user_data) || array_key_exists('password', $user_data) || array_key_exists('email', $user_data))
 		{
-			if (array_key_exists('password', $data))
+			if (array_key_exists('password', $user_data))
 			{
-				if( ! empty($data['password']))
+				if( ! empty($user_data['password']))
 				{
 					$user = $this->user($id)->row();
-					$data['password'] = $this->hash_password($data['password'], $user->{$this->identity_column});
-					if ($data['password'] === FALSE)
+					$user_data['password'] = $this->hash_password($user_data['password'], $user->{$this->identity_column});
+					if ($user_data['password'] === FALSE)
 					{
 						$this->db->trans_rollback();
 						$this->trigger_events(['post_update_user', 'post_update_user_unsuccessful']);
@@ -1824,13 +1882,38 @@ class Ion_auth_model extends CI_Model
 				else
 				{
 					// unset password so it doesn't effect database entry if no password passed
-					unset($data['password']);
+					unset($user_data['password']);
 				}
 			}
 		}
 
+	
+
 		$this->trigger_events('extra_where');
-		$this->db->update($this->tables['users'], $data, ['id' => $id]);
+
+		if(!empty($user_data)){
+			$this->db->update($this->tables['users'], $user_data, ['id' => $id]);
+		}
+
+		if(!empty($user_personal_details_data)){
+			$this->db->update($this->tables['user_personal_details'], $user_personal_details_data, ['user_id' => $id]);
+		}
+
+		if(!empty($user_contact)){
+			$this->db->update($this->tables['user_contact_details'], $user_contact, ['user_id' => $id]);
+		}
+
+		if(!empty($company)){
+			$user_company['company_id'] = $this->get_id_by_values($this->tables['companies'], $company);
+			if($user_company['company_id'] === null){
+				$this->db->insert($this->tables['companies'], $company);
+				$user_company['company_id'] = $this->db->insert_id();
+			}
+			$this->db->update($this->tables['user_companies'], $user_company, ['user_id' => $id]);
+		}
+
+		// var_dump($user_data);
+		// exit();
 
 		if ($this->db->trans_status() === FALSE)
 		{
@@ -1958,7 +2041,7 @@ class Ion_auth_model extends CI_Model
 		    'ion_auth_session_hash'    => $this->config->item('session_hash', 'ion_auth'),
 		];
 
-		$this->session->set_userdata($session_data);
+		$this->session->set_userdata('admin', $session_data);
 
 		$this->trigger_events('post_set_session');
 
@@ -2559,6 +2642,9 @@ class Ion_auth_model extends CI_Model
 		$filtered_data = [];
 		$columns = $this->db->list_fields($table);
 
+		// var_dump($table);
+		// var_dump($columns);
+		
 		if (is_array($data))
 		{
 			foreach ($columns as $column)
@@ -2567,6 +2653,9 @@ class Ion_auth_model extends CI_Model
 					$filtered_data[$column] = $data[$column];
 			}
 		}
+
+
+		// var_dump($filtered_data);
 
 		return $filtered_data;
 	}

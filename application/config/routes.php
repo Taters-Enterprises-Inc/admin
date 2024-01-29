@@ -9,6 +9,9 @@ $route['auth/logout'] = 'auth/logout';
 $route['user/information/(:any)'] = 'user/user_information/$1';
 $route['auth/edit-user/(:any)'] = 'auth/edit_user/$1';
 
+$route['auth/user/create'] = 'auth/create_user';
+
+
 $route['user/session'] = 'user/session';
 
 

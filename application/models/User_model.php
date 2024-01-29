@@ -48,24 +48,24 @@ class User_model extends CI_Model {
     } 
     
 
-    function get_store_group_order($user_id)
-    {
-        $this->db->select('
-            a.store_id, 
-            b.name, 
-            b.status, 
-            b.catering_status,
-            b.popclub_walk_in_status, 
-            b.popclub_online_delivery_status, 
-            c.name as menu_name
-        ');
-        $this->db->from('users_store_groups a');
-        $this->db->join('store_tb b', 'b.store_id = a.store_id' ,'left');
-        $this->db->join('store_menu_tb c', 'c.id = b.store_menu_type_id');
-        $this->db->where('a.user_id', $user_id);
-        $query = $this->db->get();
-        return $query->result();
-    }
+    // function get_store_group_order($user_id)
+    // {
+    //     $this->db->select('
+    //         a.store_id, 
+    //         b.name, 
+    //         b.status, 
+    //         b.catering_status,
+    //         b.popclub_walk_in_status, 
+    //         b.popclub_online_delivery_status, 
+    //         c.name as menu_name
+    //     ');
+    //     $this->db->from('users_store_groups a');
+    //     $this->db->join('store_tb b', 'b.store_id = a.store_id' ,'left');
+    //     $this->db->join('store_menu_tb c', 'c.id = b.store_menu_type_id');
+    //     $this->db->where('a.user_id', $user_id);
+    //     $query = $this->db->get();
+    //     return $query->result();
+    // }
 
     
     public function getStoredSessionId($id){
@@ -100,5 +100,29 @@ class User_model extends CI_Model {
         $query = $this->db->get();
         return $query->row();
     }
+
+    public function get_user_module($groupData){
+
+        $this->db->select('module_id');
+        $this->db->from('groups');
+        $this->db->where_in('id', $groupData);
+
+        $groupModuleIds = $this->db->get();
+        return $groupModuleIds->result();
+    }
+
+    public function insert_user_module($groupModuleIds, $user_id) {
+        $data = array();
+        
+        foreach ($groupModuleIds as $row) {
+            $data[] = array('module_id' => $row->module_id, 'user_id' => $user_id);
+        }
+
+        $this->db->trans_start();
+        $this->db->insert_batch('users_module', $data);
+        $this->db->trans_complete();
+    }
+    
+    
 
 }
