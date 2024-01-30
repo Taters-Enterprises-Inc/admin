@@ -100,29 +100,6 @@ class User_model extends CI_Model {
         $query = $this->db->get();
         return $query->row();
     }
-
-    public function get_user_module($groupData){
-
-        $this->db->select('module_id');
-        $this->db->from('groups');
-        $this->db->where_in('id', $groupData);
-
-        $groupModuleIds = $this->db->get();
-        return $groupModuleIds->result();
-    }
-
-    public function insert_user_module($groupModuleIds, $user_id) {
-        $data = array();
-        
-        foreach ($groupModuleIds as $row) {
-            $data[] = array('module_id' => $row->module_id, 'user_id' => $user_id);
-        }
-
-        $this->db->trans_start();
-        $this->db->insert_batch('users_module', $data);
-        $this->db->trans_complete();
-    }
-    
     
 
 }

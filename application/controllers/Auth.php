@@ -217,14 +217,6 @@ class Auth extends CI_Controller{
 								$this->ion_auth->add_to_group($grp, $id);
 							}
 						}
-						
-
-						$moduleIds = $this->user_model->get_user_module($groupData);
-
-					
-						if(!empty($moduleIds)){
-							$this->user_model->insert_user_module($moduleIds, $id);
-						}
 
 					}
 
