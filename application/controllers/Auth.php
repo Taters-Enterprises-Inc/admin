@@ -22,6 +22,7 @@ class Auth extends CI_Controller{
         $this->ion_auth->set_error_delimiters('', '');
 
         $this->lang->load('auth');
+        $this->load->model('user_model');
 
     }
 	
@@ -197,8 +198,8 @@ class Auth extends CI_Controller{
 					$data = [
 						'first_name' => $this->input->post('firstName'),
 						'last_name' => $this->input->post('lastName'),
-						'company' => $this->input->post('company'),
-						'phone' => $this->input->post('phoneNumber'),
+						'company_name' => $this->input->post('company'),
+						'contact_number' => $this->input->post('phoneNumber'),
 					];
 
 					// update the password if it was posted
@@ -208,43 +209,14 @@ class Auth extends CI_Controller{
 
 					// Only allow updating groups if user is admin
 					if ($this->ion_auth->is_admin()) {
-						/*
 
-						Updated parameter for remove_from_group to determine 
-						if the group is from shop or stock ordering this process
-						also applies to add_to_group. 
-
-						1 ===== shop
-						2 ===== stock order 
-						3 ===== sales
-
-						*/
-						// Update the groups user belongs to
-
-						$this->ion_auth->remove_from_group('', $id, 1);
+						$this->ion_auth->remove_from_group('', $id);
 						$groupData = $this->input->post('groups');
 						if (isset($groupData) && !empty($groupData)) {
 							foreach ($groupData as $grp) {
-								$this->ion_auth->add_to_group($grp, $id, 1);
+								$this->ion_auth->add_to_group($grp, $id);
 							}
 						}
-
-						$this->ion_auth->remove_from_group('', $id, 2);
-						$stockOrderData = $this->input->post('stock_order_group');
-						if (isset($stockOrderData) && !empty($stockOrderData)) {
-							foreach ($stockOrderData as $grp) {
-								$this->ion_auth->add_to_group($grp, $id, 2);
-							}
-						}
-
-						$this->ion_auth->remove_from_group('', $id, 3);
-						$salesData = $this->input->post('sales_group');
-						if (isset($salesData) && !empty($salesData)) {
-							foreach ($salesData as $grp) {
-								$this->ion_auth->add_to_group($grp, $id, 3);
-							}
-						}
-
 
 					}
 
@@ -319,6 +291,8 @@ class Auth extends CI_Controller{
             case 'POST':
 				$_POST =  json_decode(file_get_contents("php://input"), true);
 				$this->data['title'] = $this->lang->line('create_user_heading');
+				
+
 
 				if (!$this->ion_auth->logged_in() || !$this->ion_auth->is_admin()) {
 					$this->output->set_status_header('401');
@@ -345,10 +319,11 @@ class Auth extends CI_Controller{
 					$additional_data = [
 						'first_name' => $this->input->post('firstName'),
 						'last_name' => $this->input->post('lastName'),
-						'company' => $this->input->post('company'),
-						'phone' => $this->input->post('phoneNumber'),
+						'company_name' => $this->input->post('company'),
+						'contact_number' => $this->input->post('phoneNumber'),
 					];
 				}
+			
 				if ($this->form_validation->run() === TRUE && $this->ion_auth->register($email, $password, $email, $additional_data)) {
 					// check to see if we are creating the user
 					// redirect them back to the admin page
@@ -408,6 +383,7 @@ class Auth extends CI_Controller{
 						'type' => 'password',
 						'value' => $this->form_validation->set_value('confirmPassword'),
 					];
+
 		
 					$this->output->set_status_header('401');
 					header('content-type: application/json');

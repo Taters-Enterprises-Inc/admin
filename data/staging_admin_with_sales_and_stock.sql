@@ -1,4 +1,3 @@
-
 CREATE TABLE modules(
     id int(2) PRIMARY KEY AUTO_INCREMENT,
     name varchar(64), 
@@ -32,3 +31,9 @@ INSERT INTO `groups`(`name`, `description`, `module_id`)VALUES
 ("supplier dispatch", "Supplier Dispatch", 3),
 ("finance", "Finance", 3),
 ("supplier finance", "Supplier Finance", 3);
+
+INSERT INTO `groups` (`id`, `name`, `description`, `module_id`) VALUES ('17', 'members', 'Members', NULL)
+
+ALTER TABLE `companies` CHANGE `name` `company_name` VARCHAR(265) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL;
+
+ALTER TABLE `users_module` CHANGE `module_id` `module_id` MEDIUMINT(8) UNSIGNED NULL;
